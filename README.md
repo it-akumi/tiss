@@ -1,2 +1,3 @@
 # tiss
-Project for WBAI
+## 課題内容
+規定課題競技
