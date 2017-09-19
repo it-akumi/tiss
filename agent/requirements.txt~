@@ -1,0 +1,6 @@
+chainer==1.15
+ws4py
+cherrypy
+msgpack-python
+pillow
+argparse

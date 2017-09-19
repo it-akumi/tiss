@@ -1,0 +1,57 @@
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../agent')
+import numpy as np
+import six.moves.cPickle as pickle
+
+from PIL import Image
+from PIL import ImageOps
+
+from ml.cnn_feature_extractor import CnnFeatureExtractor
+
+def observation(rgb_file_name, depth_file_name, depth_image_dim=32*32):
+    image = []
+    image.append(Image.open(rgb_file_name))
+
+    depth = []
+    d = Image.open(depth_file_name)
+    depth.append(np.array(ImageOps.grayscale(d)).reshape(depth_image_dim))
+
+    observation = {"image": image, "depth": depth}
+
+    return observation
+
+def get_pictures():
+    pictures = [filename for filename in os.listdir('.') if 'png' in filename]
+    pictures.sort(cmp = lambda x, y: cmp(int(x.replace('.png', '')), int(y.replace('.png', ''))))
+    return pictures
+
+def take2(array):
+    i = iter(array)
+    while True:
+        yield i.next(), i.next()
+
+def main():
+    print('load pickle')
+    feature_extractor = pickle.load(open(os.path.dirname(os.path.abspath(__file__)) + '/../agent/model/alexnet_feature_extractor.pickle'))
+    print('done load pickle')
+
+    pictures = get_pictures()
+
+    feature_matrix = None
+
+    for rgb, depth in take2(pictures):
+        ob = observation(rgb, depth)
+        obs_array = feature_extractor.feature(ob, 1)
+        if feature_matrix is None:
+            feature_matrix = np.array(list(obs_array))
+        else:
+            feature_matrix = np.append(feature_matrix, list(obs_array), axis=0)
+
+    np.savetxt('feature_matrix.csv', feature_matrix, fmt="%0.8f", delimiter=',')
+        # print(len(obs_array))
+        # print(obs_array)
+
+
+if __name__ == '__main__':
+    main()
