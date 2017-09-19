@@ -15,7 +15,6 @@ class QNet:
     gamma = 0.99  # Discount factor
     initial_exploration = 10**3  # Initial exploratoin. original: 5x10^4
     replay_size = 32  # Replay (batch) size
-    preplay_size = 5
     target_model_update_freq = 10**4  # Target update frequancy. original: 10^4
     data_size = 10**5  # Data size of history. original: 10^6
     hist_size = 1  # original: 4
@@ -98,51 +97,6 @@ class QNet:
         loss = F.mean_squared_error(td_clip, zero_val)
         return loss, q
 
-    def forward_preplay(self, state, action, reward, state_dash, episode_end):
-        num_of_batch = state.shape[0]
-        s = Variable(state)
-        s_dash = Variable(state_dash)
-
-        q = self.q_func(s)  # Get Q-value
-
-        # Generate Target Signals
-        tmp = self.q_func_target(s_dash)  # Q(s',*)
-        if self.use_gpu >= 0:
-            tmp = list(map(np.max, tmp.data.get()))  # max_a Q(s',a)
-        else:
-            tmp = list(map(np.max, tmp.data))  # max_a Q(s',a)
-
-        max_q_dash = np.asanyarray(tmp, dtype=np.float32)
-        if self.use_gpu >= 0:
-            target = np.asanyarray(q.data.get(), dtype=np.float32)
-        else:
-            # make new array
-            target = np.array(q.data, dtype=np.float32)
-
-        for i in xrange(num_of_batch):
-            if not episode_end[i][0]:
-                tmp_ = reward[i] + self.gamma * max_q_dash[i]
-            else:
-                tmp_ = reward[i]
-
-            action_index = self.action_to_index(action[i])
-            target[i, action_index] = tmp_
-
-        # TD-error clipping
-        if self.use_gpu >= 0:
-            target = cuda.to_gpu(target)
-        td = Variable(target) - q  # TD error
-        td_tmp = td.data + 1000.0 * (abs(td.data) <= 1)  # Avoid zero division
-        td_clip = td * (abs(td.data) <= 1) + td/abs(td_tmp) * (abs(td.data) > 1)
-
-        zero_val = np.zeros((self.preplay_size, self.num_of_actions), dtype=np.float32)
-        if self.use_gpu >= 0:
-            zero_val = cuda.to_gpu(zero_val)
-        zero_val = Variable(zero_val)
-        loss = F.mean_squared_error(td_clip, zero_val)
-        return loss, q
-
-
     def q_func(self, state):
         h4 = F.relu(self.model.l4(state / 255.0))
         q = self.model.q_value(h4)
@@ -211,7 +165,7 @@ class QNet:
     def update_model_preplay(self, preplayed_experience):
         if preplayed_experience[0]:
             self.optimizer.zero_grads()
-            loss, _ = self.forward_preplay(preplayed_experience[1], preplayed_experience[2],
+            loss, _ = self.forward(preplayed_experience[1], preplayed_experience[2],
                                         preplayed_experience[3], preplayed_experience[4], preplayed_experience[5])
             loss.backward()
             self.optimizer.update()

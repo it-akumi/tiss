@@ -56,8 +56,7 @@ class CnnFeatureExtractor:
         image -= self.mean_image
 
         x_batch[0] = image
-        # xp = cuda.cupy if self.gpu >= 0 else np
-        xp = np
+        xp = cuda.cupy if self.gpu >= 0 else np
         x_data = xp.asarray(x_batch)
 
         if self.gpu >= 0:

@@ -7,7 +7,7 @@ public class LISClient {
     private HttpClient client = new HttpClient();
     private Queue<string> queue = new Queue<string>(){};
 
-	public string host = "13.78.125.89";
+    public string host = "localhost";
     public string port = "8765";
 
     public bool HasAction = false;

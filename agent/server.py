@@ -13,6 +13,8 @@ from PIL import ImageOps
 
 from cognitive import interpreter
 from ml.cnn_feature_extractor import CnnFeatureExtractor
+from ml.prediction import Prediction
+
 
 from config import BRICA_CONFIG_FILE
 from config.model import CNN_FEATURE_EXTRACTOR, CAFFE_MODEL, MODEL_TYPE
@@ -30,20 +32,29 @@ app_logger = logging.getLogger(APP_KEY)
 outbound_logger = logging.getLogger(OUTBOUND_KEY)
 
 
-def unpack(payload, depth_image_count=1, depth_image_dim=32*32):
+def unpack(payload, prediction, depth_image_count=1, depth_image_dim=32*32):
     dat = msgpack.unpackb(payload)
 
+    next_action = np.random.randint(0, 3)
+
     image = []
+    tmp_image = None
     for i in xrange(depth_image_count):
-        image.append(Image.open(io.BytesIO(bytearray(dat['image'][i]))))
+        tmp_image = Image.open(io.BytesIO(bytearray(dat['image'][i])))
+        image.append(tmp_image)
 
     depth = []
+    tmp_depth = None
     for i in xrange(depth_image_count):
-        d = (Image.open(io.BytesIO(bytearray(dat['depth'][i]))))
-        depth.append(np.array(ImageOps.grayscale(d)).reshape(depth_image_dim))
+        tmp_depth = (Image.open(io.BytesIO(bytearray(dat['depth'][i]))))
+        depth.append(np.array(ImageOps.grayscale(tmp_depth)).reshape(depth_image_dim))
+
+    next_image , next_depth = prediction.predict(tmp_image, tmp_depth, next_action)
+    next_depth = np.array(ImageOps.grayscale(tmp_depth)).reshape(depth_image_dim)
 
     reward = dat['reward']
-    observation = {"image": image, "depth": depth}
+    observation = {"image": image, "depth": depth,
+                   "next_image": [next_image], "next_depth": [next_depth], "next_action":next_action}
     rotation = dat['rotation']
     movement = dat['movement']
 
@@ -79,6 +90,7 @@ class Root(object):
             pickle.dump(self.feature_extractor, open(CNN_FEATURE_EXTRACTOR, 'w'))
             app_logger.info("pickle.dump finished")
 
+        self.prediction = Prediction(use_gpu)
         self.agent_service = AgentService(BRICA_CONFIG_FILE, self.feature_extractor)
         self.result_logger = ResultLogger()
 
@@ -89,7 +101,7 @@ class Root(object):
     @cherrypy.expose
     def create(self, identifier):
         body = cherrypy.request.body.read()
-        reward, observation, rotation, movement = unpack(body)
+        reward, observation, rotation, movement= unpack(body, self.prediction)
 
         inbound_logger.info('reward: {}, depth: {}'.format(reward, observation['depth']))
         feature = self.feature_extractor.feature(observation)
@@ -103,7 +115,7 @@ class Root(object):
     @cherrypy.expose
     def step(self, identifier):
         body = cherrypy.request.body.read()
-        reward, observation, rotation, movement = unpack(body)
+        reward, observation, rotation, movement= unpack(body, self.prediction)
 
         inbound_logger.info('reward: {}, depth: {}'.format(reward, observation['depth']))
 
@@ -128,12 +140,12 @@ class Root(object):
 
 def main(args):
     cherrypy.config.update({'server.socket_host': args.host, 'server.socket_port': args.port, 'log.screen': False,
-                            'log.access_file': CHERRYPY_ACCESS_LOG, 'log.error_file': CHERRYPY_ERROR_LOG})
+                            'log.access_file': CHERRYPY_ACCESS_LOG, 'log.error_file': CHERRYPY_ERROR_LOG, 'server.thread_pool': 1})
     cherrypy.quickstart(Root())
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='LIS Backend')
-    parser.add_argument('--host', default='0.0.0.0', type=str, help='Server hostname')
+    parser.add_argument('--host', default='localhost', type=str, help='Server hostname')
     parser.add_argument('--port', default=8765, type=int, help='Server port number')
     args = parser.parse_args()
 

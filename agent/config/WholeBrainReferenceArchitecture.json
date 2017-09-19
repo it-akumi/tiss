@@ -626,7 +626,7 @@
   {
    "Comment": "An output port of Isocortex#VVC for connection to UB",
    "Shape": [
-    10240
+    20481
    ],
    "Type": "Output",
    "Name": "Isocortex#VVC-UB-Output",
@@ -635,7 +635,7 @@
   {
    "Comment": "An input port of UB for connection from Isocortex#VVC",
    "Shape": [
-    10240
+    20481
    ],
    "Type": "Input",
    "Name": "Isocortex#VVC-UB-Input",
